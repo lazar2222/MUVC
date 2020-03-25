@@ -40,7 +40,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Class\Message.cs" />
+    <Compile Include="Class\Sesion.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Server\Executor.cs" />
     <Compile Include="Util\Util.cs" />
     <Compile Include="Server\VirtualConsoleServer.cs" />
   </ItemGroup>
