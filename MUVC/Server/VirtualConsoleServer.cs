@@ -38,8 +38,12 @@ namespace MUVC.Server
         private int BUF_SIZE = 10007;
         private ConcurrentQueue<Message> INqueue = new ConcurrentQueue<Message>();
         private ConcurrentDictionary<Sesion, ConcurrentQueue<string>> OUTqueue = new ConcurrentDictionary<Sesion, ConcurrentQueue<string>>();
-        private ConcurrentQueue<string> BCSqueue = new ConcurrentQueue<string>();
         private List<Sesion> sesions = new List<Sesion>();
+        private bool eventpush = false;
+
+        public delegate void recMessage(string messageText,Sesion sesion);
+        public event recMessage MessageRecieved;
+
 
         #endregion
 
@@ -104,11 +108,16 @@ namespace MUVC.Server
             WriteLine(Util.DISCONNECT_STRING, sesion);
         }
 
+        public void SetEventPush(bool ep)
+        {
+            eventpush = ep;
+        }
+
         #endregion
 
         #region threads
 
-        void ServerThread()
+        private void ServerThread()
         {
             TcpListener TcpServer = new TcpListener(IPAddress.Any, port);
             TcpServer.Start();
@@ -128,7 +137,7 @@ namespace MUVC.Server
             Log.WriteLine("TCP Closed");
         }
 
-        void ClientThread(object data)
+        private void ClientThread(object data)
         {
             TcpClient client = (TcpClient)data;
             Sesion sesion = new Sesion((IPEndPoint)client.Client.RemoteEndPoint);
@@ -175,7 +184,14 @@ namespace MUVC.Server
                         }
                         else
                         {
-                            INqueue.Enqueue(new Message(recString, sesion));
+                            if (MessageRecieved == null || eventpush)
+                            {
+                                INqueue.Enqueue(new Message(recString, sesion));
+                            }
+                            else
+                            {
+                                MessageRecieved(recString, sesion);
+                            }
                         }
                     }
                 }
@@ -194,15 +210,6 @@ namespace MUVC.Server
 
                         Log.WriteLine("Client Terminated:" + sesion.Address);
                     }
-
-                    Log.WriteLine(sesion.Address + "<" + trString);
-                }
-                if (BCSqueue.Count > 0)
-                {
-                    string trString;
-                    BCSqueue.TryDequeue(out trString);
-                    byte[] sendbuf = Encoding.ASCII.GetBytes(trString + "\n");
-                    stream.Write(sendbuf, 0, sendbuf.Length);
 
                     Log.WriteLine(sesion.Address + "<" + trString);
                 }

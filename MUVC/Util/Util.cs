@@ -31,8 +31,10 @@ namespace MUVC.UTIL
 
     public class Util
     {
-        public const string MUVC_STRING= "MUVC";
-        public const string DISCONNECT_STRING= "MUVC DSC";
+        public const string MUVC_STRING = "MUVC";
+        public const string DISCONNECT_STRING = "MUVC DSC";
+        public const int DEFAULT_PORT = 53777;
+        public const int CLIENT_OFFSET = 10;
 
         public static string[] SmartSplit(string input)
         {
@@ -80,7 +82,7 @@ namespace MUVC.UTIL
             if (LOG)
             {
                 ConsoleColor pre = Console.ForegroundColor;
-                Console.ForegroundColor=ConsoleColor.Green;
+                Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("LOG: " + line);
                 Console.ForegroundColor = pre;
             }
