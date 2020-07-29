@@ -1,14 +1,11 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using MUVC.Server.Class;
+using MUVC.Server.Util;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
-using MUVC.Class;
-using MUVC.UTIL;
 
 namespace MUVC.Server
 {
@@ -20,6 +17,7 @@ namespace MUVC.Server
         {
             running = false;
             port = Port;
+            timeToLiveSeconds = -1;
         }
 
         public VirtualConsoleServer(int Port, int BS)
@@ -27,6 +25,7 @@ namespace MUVC.Server
             running = false;
             port = Port;
             BUF_SIZE = BS;
+            timeToLiveSeconds = -1;
         }
 
         #endregion
@@ -36,12 +35,13 @@ namespace MUVC.Server
         private bool running = false;
         private int port;
         private int BUF_SIZE = 10007;
-        private ConcurrentQueue<Message> INqueue = new ConcurrentQueue<Message>();
-        private ConcurrentDictionary<Sesion, ConcurrentQueue<string>> OUTqueue = new ConcurrentDictionary<Sesion, ConcurrentQueue<string>>();
+        private ConcurrentMessageQueue INqueue = new ConcurrentMessageQueue();
+        private Dictionary<Sesion, ConcurrentMessageQueue> OUTqueue = new Dictionary<Sesion, ConcurrentMessageQueue>();
         private List<Sesion> sesions = new List<Sesion>();
         private bool eventpush = false;
 
-        public delegate void recMessage(string messageText,Sesion sesion);
+        public int timeToLiveSeconds { get; set; }
+        public delegate void recMessage(string messageText, Sesion sesion);
         public event recMessage MessageRecieved;
 
 
@@ -60,52 +60,68 @@ namespace MUVC.Server
 
         public void Stop()
         {
-            if (running)
-            {
-                running = false;
-            }
+            running = false;
+        }
+
+        public bool AvailableRead()
+        {
+            //TODO
+            return true;
         }
 
         public string ReadLine(out Sesion sesion)
         {
             CheckEx();
-            while (INqueue.IsEmpty) { }
-            Message m;
-            INqueue.TryDequeue(out m);
+            Message m = INqueue.BlockingDequeue();
             sesion = m.Sesion;
             return m.Contents;
+        }
+
+        public bool AvailableReadFilter()
+        {
+            //TODO
+            return true;
         }
 
         public string ReadLineFilter(Sesion filter)
         {
             CheckEx();
-            while (INqueue.Where((x) => x.Sesion == filter).Count() < 1) { }
-            return INqueue.Where((x) => x.Sesion == filter).First().Contents;
+            return INqueue.BlockingFilteredDequeue(filter).Contents;
         }
 
-        public void WriteLine(string line,Sesion destination)
+        public void WriteLine(string line, Sesion destination)
         {
             CheckEx();
             CheckDestination(destination);
-            OUTqueue[destination].Enqueue(line);
+            lock (OUTqueue)
+            {
+                OUTqueue[destination].Enqueue(new Message(line, destination));
+            }
         }
 
         public void BroadcastLine(string line)
         {
             CheckEx();
-            BCSqueue.Enqueue(line);
+            lock (OUTqueue)
+            {
+                foreach (KeyValuePair<Sesion, ConcurrentMessageQueue> kvp in OUTqueue)
+                    kvp.Value.Enqueue(new Message(line, kvp.Key));
+            }
         }
 
-        public List<Sesion> GetSesions()
+        public Sesion[] GetSesions()
         {
             CheckEx();
-            return sesions;
+            lock (sesions)
+            {
+                return sesions.ToArray();
+            }
         }
-        
+
         public void TerminateSesion(Sesion sesion)
         {
             CheckEx();
-            WriteLine(Util.DISCONNECT_STRING, sesion);
+            WriteLine(ServerUtil.DISCONNECT_STRING, sesion);
         }
 
         public void SetEventPush(bool ep)
@@ -137,16 +153,26 @@ namespace MUVC.Server
             Log.WriteLine("TCP Closed");
         }
 
+        //TODO: Optimize
         private void ClientThread(object data)
         {
             TcpClient client = (TcpClient)data;
             Sesion sesion = new Sesion((IPEndPoint)client.Client.RemoteEndPoint);
-            sesions.Add(sesion);
-            OUTqueue[sesion] = new ConcurrentQueue<string>();
+            ConcurrentMessageQueue OUTQ = new ConcurrentMessageQueue();
+            lock (sesion)
+            {
+                sesions.Add(sesion);
+            }
+            lock (OUTqueue)
+            {
+                OUTqueue[sesion] = OUTQ;
+            }
             NetworkStream stream = client.GetStream();
             byte[] buffer = new byte[BUF_SIZE];
             int bufPos = 0;
             int toRead = 0;
+            sesion.LastSeen = DateTime.Now.Ticks;
+            sesion.Notified = false;
 
             Log.WriteLine("Client Opened:" + sesion.Address);
 
@@ -155,6 +181,8 @@ namespace MUVC.Server
                 toRead = client.Available;
                 if (toRead > 0)
                 {
+                    sesion.LastSeen = DateTime.Now.Ticks;
+                    sesion.Notified = false;
                     buffer[bufPos++] = (byte)stream.ReadByte();
                     if (buffer[bufPos - 1] == '\n')
                     {
@@ -162,16 +190,23 @@ namespace MUVC.Server
                         bufPos = 0;
                         recString = recString.Trim();
 
+                        //TODO: Da li je prazna poruka valida i da li last seen zavisi od poslednjeg karaktera ili poruke also keepalive u jedinicama koje nisu sekunde
+
                         Log.WriteLine(sesion.Address + ">" + recString);
 
-                        if (recString.StartsWith(Util.MUVC_STRING))
+                        if (recString.StartsWith(ServerUtil.MUVC_STRING))
                         {
-                            if (recString == Util.DISCONNECT_STRING)
+                            if (recString == ServerUtil.DISCONNECT_STRING)
                             {
                                 client.Close();
-                                ConcurrentQueue<string> b;
-                                OUTqueue.TryRemove(sesion, out b);
-                                sesions.Remove(sesion);
+                                lock (OUTqueue)
+                                {
+                                    OUTqueue.Remove(sesion);
+                                }
+                                lock (sesions)
+                                {
+                                    sesions.Remove(sesion);
+                                }
 
                                 Log.WriteLine("Client DSC:" + sesion.Address);
 
@@ -188,39 +223,76 @@ namespace MUVC.Server
                             {
                                 INqueue.Enqueue(new Message(recString, sesion));
                             }
-                            else
-                            {
-                                MessageRecieved(recString, sesion);
-                            }
+                            MessageRecieved?.Invoke(recString, sesion);
+
                         }
                     }
                 }
-                if (OUTqueue[sesion].Count > 0)
+                if (!OUTQ.IsEmpty())
                 {
-                    string trString;
-                    OUTqueue[sesion].TryDequeue(out trString);
+                    string trString = OUTQ.Dequeue().Contents;
                     byte[] sendbuf = Encoding.ASCII.GetBytes(trString + "\n");
                     stream.Write(sendbuf, 0, sendbuf.Length);
-                    if (trString == Util.DISCONNECT_STRING)
+                    if (trString == ServerUtil.DISCONNECT_STRING)
                     {
                         client.Close();
-                        ConcurrentQueue<string> c;
-                        OUTqueue.TryRemove(sesion, out c);
-                        sesions.Remove(sesion);
+                        lock (OUTqueue)
+                        {
+                            OUTqueue.Remove(sesion);
+                        }
+                        lock (sesions)
+                        {
+                            sesions.Remove(sesion);
+                        }
 
                         Log.WriteLine("Client Terminated:" + sesion.Address);
+
+                        return;
                     }
 
                     Log.WriteLine(sesion.Address + "<" + trString);
                 }
+                if (timeToLiveSeconds >= 0 && (DateTime.Now.Ticks - sesion.LastSeen) / ServerUtil.SECOND_TICKS > timeToLiveSeconds)
+                {
+                    if (sesion.Notified)
+                    {
+                        client.Close();
+                        lock (OUTqueue)
+                        {
+                            OUTqueue.Remove(sesion);
+                        }
+                        lock (sesions)
+                        {
+                            sesions.Remove(sesion);
+                        }
+
+                        Log.WriteLine("Client Timed Out:" + sesion.Address);
+
+                        return;
+                    }
+                    else
+                    {
+                        byte[] Ksendbuf = Encoding.ASCII.GetBytes(ServerUtil.KEEPALIVE_STRING + "\n");
+                        stream.Write(Ksendbuf, 0, Ksendbuf.Length);
+                        sesion.LastSeen = DateTime.Now.Ticks;
+                        sesion.Notified = true;
+
+                        Log.WriteLine("Client Notified:" + sesion.Address);
+                    }
+                }
 
             }
-            byte[] Dsendbuf = Encoding.ASCII.GetBytes(Util.DISCONNECT_STRING + "\n");
+            byte[] Dsendbuf = Encoding.ASCII.GetBytes(ServerUtil.DISCONNECT_STRING + "\n");
             stream.Write(Dsendbuf, 0, Dsendbuf.Length);
             client.Close();
-            ConcurrentQueue<string> a;
-            OUTqueue.TryRemove(sesion,out a);
-            sesions.Remove(sesion);
+            lock (OUTqueue)
+            {
+                OUTqueue.Remove(sesion);
+            }
+            lock (sesions)
+            {
+                sesions.Remove(sesion);
+            }
 
             Log.WriteLine("Client Closed:" + sesion.Address);
         }
@@ -239,9 +311,12 @@ namespace MUVC.Server
 
         private void CheckDestination(Sesion destination)
         {
-            if (!sesions.Contains(destination))
+            lock (sesions)
             {
-                throw new NoDestinationException();
+                if (!sesions.Contains(destination))
+                {
+                    throw new NoDestinationException();
+                }
             }
         }
 

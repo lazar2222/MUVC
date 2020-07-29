@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Collections.Generic;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace MUVC.Class
+namespace MUVC.Server.Class
 {
     public class Sesion
     {
@@ -20,6 +16,8 @@ namespace MUVC.Class
         public Dictionary<string, object> Context { get; }
         public int Port { get { return identifier.Port; } }
         public IPAddress Address { get { return identifier.Address; } }
+        public long LastSeen { get; set; }
+        public bool Notified { get; set; }
 
     }
 }

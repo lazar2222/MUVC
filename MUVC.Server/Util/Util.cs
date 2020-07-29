@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MUVC.UTIL
+namespace MUVC.Server.Util
 {
     [Serializable]
     public class NotStartedException : Exception
@@ -29,12 +29,14 @@ namespace MUVC.UTIL
           System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
     }
 
-    public class Util
+    public class ServerUtil
     {
         public const string MUVC_STRING = "MUVC";
         public const string DISCONNECT_STRING = "MUVC DSC";
+        public const string KEEPALIVE_STRING = "MUVC KAL";
         public const int DEFAULT_PORT = 53777;
         public const int CLIENT_OFFSET = 10;
+        public const double SECOND_TICKS = 1000 * 10000;
 
         public static string[] SmartSplit(string input)
         {
