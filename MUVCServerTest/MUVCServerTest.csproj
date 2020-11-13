@@ -59,6 +59,10 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\MUVC.Core\MUVC.Core.csproj">
+      <Project>{4af66491-f963-45bf-9f79-8474732dbf8d}</Project>
+      <Name>MUVC.Core</Name>
+    </ProjectReference>
     <ProjectReference Include="..\MUVC.Server\MUVC.Server.csproj">
       <Project>{e56ab2e4-c60e-4ec9-bdf7-1c6482b0eeaf}</Project>
       <Name>MUVC.Server</Name>

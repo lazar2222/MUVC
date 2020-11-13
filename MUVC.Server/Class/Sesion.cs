@@ -18,6 +18,5 @@ namespace MUVC.Server.Class
         public IPAddress Address { get { return identifier.Address; } }
         public long LastSeen { get; set; }
         public bool Notified { get; set; }
-
     }
 }

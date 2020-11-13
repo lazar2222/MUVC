@@ -1,7 +1,6 @@
 ﻿using MUVC.Client.Util;
 using MUVC.Core.Util;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
@@ -80,7 +79,7 @@ namespace MUVC.Client
                 OutQueue = new Queue<string>();
                 new Thread(ClientThread).Start();
             }
-            else 
+            else
             {
                 throw new AlreadyConnectedException();
             }
@@ -94,7 +93,7 @@ namespace MUVC.Client
         public bool AvalableRead()
         {
             CheckEx();
-            lock (InQueue) 
+            lock (InQueue)
             {
                 return InQueue.Count > 0;
             }
@@ -107,7 +106,7 @@ namespace MUVC.Client
             {
                 lock (InQueue)
                 {
-                    if (InQueue.Count > 0) 
+                    if (InQueue.Count > 0)
                     {
                         return InQueue.Dequeue();
                     }
@@ -118,7 +117,7 @@ namespace MUVC.Client
         public void WriteLine(string line)
         {
             CheckEx();
-            lock (OutQueue) 
+            lock (OutQueue)
             {
                 OutQueue.Enqueue(line);
             }

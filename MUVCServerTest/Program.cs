@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using MUVC.Core.Util;
 using MUVC.Server;
-using MUVC.Server.Util;
+using System;
 
 namespace MUVCServerTest
 {
@@ -13,8 +9,10 @@ namespace MUVCServerTest
         static void Main(string[] args)
         {
             Log.LOG = true;
-            VirtualConsoleServer Server = new VirtualConsoleServer(53777);
-            Server.timeToLiveSeconds = 10;
+            VirtualConsoleServer Server = new VirtualConsoleServer(53777)
+            {
+                TimeToLiveSeconds = 10
+            };
             Server.Start();
             Console.ReadLine();
             Server.Stop();

@@ -1,24 +1,20 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace MUVC.Server.Class
 {
     class ConcurrentMessageQueue
     {
-        public ConcurrentMessageQueue() 
+        public ConcurrentMessageQueue()
         {
             ll = new LinkedList<Message>();
         }
 
         private LinkedList<Message> ll;
 
-        public bool IsEmpty() 
+        public bool IsEmpty()
         {
-            lock (ll) 
+            lock (ll)
             {
                 return ll.Count == 0;
             }
@@ -29,7 +25,7 @@ namespace MUVC.Server.Class
             lock (ll)
             {
                 LinkedListNode<Message> node = ll.First;
-                while (node != null) 
+                while (node != null)
                 {
                     if (node.Value.Sesion == target) { return true; }
                     node = node.Next;
@@ -38,17 +34,17 @@ namespace MUVC.Server.Class
             }
         }
 
-        public void Enqueue(Message msg) 
+        public void Enqueue(Message msg)
         {
-            lock (ll) 
+            lock (ll)
             {
                 ll.AddLast(msg);
             }
         }
 
-        public Message Dequeue() 
+        public Message Dequeue()
         {
-            lock (ll) 
+            lock (ll)
             {
                 if (ll.Count == 0) { throw new InvalidOperationException("Queue is empty"); }
                 Message msg;
@@ -75,7 +71,7 @@ namespace MUVC.Server.Class
             }
         }
 
-        public Message FilteredDequeue(Sesion target) 
+        public Message FilteredDequeue(Sesion target)
         {
             lock (ll)
             {
@@ -84,10 +80,11 @@ namespace MUVC.Server.Class
                 LinkedListNode<Message> node = ll.First;
                 while (node != null)
                 {
-                    if (node.Value.Sesion == target) 
-                    { 
+                    if (node.Value.Sesion == target)
+                    {
                         msg = node.Value;
                         ll.Remove(node);
+                        return msg;
                     }
                     node = node.Next;
                 }
@@ -103,7 +100,7 @@ namespace MUVC.Server.Class
             {
                 lock (ll)
                 {
-                    
+
                     node = ll.First;
                     while (node != null)
                     {
@@ -111,6 +108,7 @@ namespace MUVC.Server.Class
                         {
                             msg = node.Value;
                             ll.Remove(node);
+                            return msg;
                         }
                         node = node.Next;
                     }
