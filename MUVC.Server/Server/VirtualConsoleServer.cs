@@ -46,19 +46,19 @@ namespace MUVC.Server
         private int _Port;
         private int _BufferSize;
         private double _TimeToLiveSeconds;
-        private bool _EventPush=false;
+        private bool _EventPush = false;
         private ConcurrentMessageQueue INqueue = new ConcurrentMessageQueue();
         private Dictionary<Sesion, ConcurrentMessageQueue> OUTqueue = new Dictionary<Sesion, ConcurrentMessageQueue>();
         private List<Sesion> sesions = new List<Sesion>();
-        private event recMessage MessageRecieved=null;
+        private event recMessage MessageRecieved = null;
 
-        public int Port 
-        { 
-            get 
+        public int Port
+        {
+            get
             {
                 return _Port;
-            } 
-            set 
+            }
+            set
             {
                 if (!running)
                 {
@@ -68,7 +68,7 @@ namespace MUVC.Server
                 {
                     throw new InvalidOperationException("Server is running");
                 }
-            } 
+            }
         }
 
         public int BufferSize
@@ -129,7 +129,7 @@ namespace MUVC.Server
         }
 
         public delegate void recMessage(string messageText, Sesion sesion);
-        
+
 
 
         #endregion
@@ -150,7 +150,7 @@ namespace MUVC.Server
             running = false;
         }
 
-        public void Reset() 
+        public void Reset()
         {
             if (!running)
             {
@@ -158,21 +158,21 @@ namespace MUVC.Server
                 OUTqueue = new Dictionary<Sesion, ConcurrentMessageQueue>();
                 sesions = new List<Sesion>();
             }
-            else 
+            else
             {
                 throw new InvalidOperationException("Server is running");
             }
         }
 
-        public void AddListener(recMessage m) 
+        public void AddListener(recMessage m)
         {
-            lock (MessageRecieved) 
+            lock (MessageRecieved)
             {
                 MessageRecieved += m;
             }
         }
 
-        public void RemoveListener(recMessage m) 
+        public void RemoveListener(recMessage m)
         {
             lock (MessageRecieved)
             {
