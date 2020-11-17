@@ -23,4 +23,15 @@ namespace MUVC.Client.Util
           System.Runtime.Serialization.SerializationInfo info,
           System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
     }
+
+    [Serializable]
+    public class FailedToConnectException : Exception
+    {
+        public FailedToConnectException() { }
+        public FailedToConnectException(string message) : base(message) { }
+        public FailedToConnectException(string message, Exception inner) : base(message, inner) { }
+        protected FailedToConnectException(
+          System.Runtime.Serialization.SerializationInfo info,
+          System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
+    }
 }

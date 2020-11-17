@@ -50,7 +50,6 @@ namespace MUVC.Server
         private ConcurrentMessageQueue INqueue = new ConcurrentMessageQueue();
         private Dictionary<Sesion, ConcurrentMessageQueue> OUTqueue = new Dictionary<Sesion, ConcurrentMessageQueue>();
         private List<Sesion> sesions = new List<Sesion>();
-        private event recMessage MessageRecieved = null;
 
         public int Port
         {
@@ -129,8 +128,7 @@ namespace MUVC.Server
         }
 
         public delegate void recMessage(string messageText, Sesion sesion);
-
-
+        public event recMessage MessageRecieved = null;
 
         #endregion
 
@@ -164,22 +162,6 @@ namespace MUVC.Server
             }
         }
 
-        public void AddListener(recMessage m)
-        {
-            lock (MessageRecieved)
-            {
-                MessageRecieved += m;
-            }
-        }
-
-        public void RemoveListener(recMessage m)
-        {
-            lock (MessageRecieved)
-            {
-                MessageRecieved -= m;
-            }
-        }
-
         public bool AvailableRead()
         {
             return !INqueue.IsEmpty();
@@ -187,7 +169,6 @@ namespace MUVC.Server
 
         public string ReadLine(out Sesion sesion)
         {
-            CheckEx();
             Message m = INqueue.BlockingDequeue();
             sesion = m.Sesion;
             return m.Contents;
@@ -200,7 +181,6 @@ namespace MUVC.Server
 
         public string ReadLineFilter(Sesion filter)
         {
-            CheckEx();
             return INqueue.BlockingFilteredDequeue(filter).Contents;
         }
 
@@ -386,6 +366,7 @@ namespace MUVC.Server
             TcpClient client = (TcpClient)data;
             Sesion sesion = new Sesion((IPEndPoint)client.Client.RemoteEndPoint);
             ConcurrentMessageQueue OUTQ = new ConcurrentMessageQueue();
+            Random random = new Random();
             lock (sesion)
             {
                 sesions.Add(sesion);
@@ -400,7 +381,8 @@ namespace MUVC.Server
             string msg;
             int bufPos = 0;
             sesion.LastSeen = DateTime.Now.Ticks;
-            sesion.Notified = false;
+            double cTTL = _TimeToLiveSeconds * (random.NextDouble() + 1);
+            //sesion.Notified = false;
 
             Log.WriteLine("Client Opened:" + sesion.Address);
 
@@ -412,7 +394,8 @@ namespace MUVC.Server
                     if (buffer[bufPos - 1] == CoreUtil.MESSAGE_TERMINATOR)
                     {
                         sesion.LastSeen = DateTime.Now.Ticks;
-                        sesion.Notified = false;
+                        cTTL = _TimeToLiveSeconds * (random.NextDouble() + 1);
+                        //sesion.Notified = false;
                         msg = Encoding.ASCII.GetString(buffer, 0, bufPos - 1);
                         bufPos = 0;
 
@@ -436,24 +419,26 @@ namespace MUVC.Server
 
                                 return;
                             }
+                            //else if (msg == CoreUtil.KEEPALIVE_STRING)
+                            //{
+                            //    sendbuf = Encoding.ASCII.GetBytes(CoreUtil.ACKNOWLEDGE_STRING + CoreUtil.MESSAGE_TERMINATOR);
+                            //    safeWrite(stream, sendbuf, 0, sendbuf.Length);
+
+                            //    Log.WriteLine("Responded to client keepalive:" + sesion.Address);
+                            //}
                             else
                             {
-                                //TODO handle MUVC commands
+                                //TODO handle other MUVC commands
                             }
                         }
                         else
                         {
-                            lock (MessageRecieved)
+                            recMessage handler = MessageRecieved;
+                            if (handler == null || _EventPush)
                             {
-                                if (MessageRecieved == null || _EventPush)
-                                {
-                                    INqueue.Enqueue(new Message(msg, sesion));
-                                }
-                                if (MessageRecieved != null)
-                                {
-                                    MessageRecieved?.Invoke(msg, sesion);
-                                }
+                                INqueue.Enqueue(new Message(msg, sesion));
                             }
+                            handler?.Invoke(msg, sesion);
                         }
                     }
                 }
@@ -461,7 +446,9 @@ namespace MUVC.Server
                 {
                     msg = OUTQ.Dequeue().Contents;
                     sendbuf = Encoding.ASCII.GetBytes(msg + CoreUtil.MESSAGE_TERMINATOR);
-                    stream.Write(sendbuf, 0, sendbuf.Length);
+                    SafeWrite(stream, sendbuf, 0, sendbuf.Length);
+                    sesion.LastSeen = DateTime.Now.Ticks;
+                    cTTL = _TimeToLiveSeconds * (random.NextDouble() + 1);
                     if (msg == CoreUtil.DISCONNECT_STRING)
                     {
                         client.Close();
@@ -481,37 +468,38 @@ namespace MUVC.Server
 
                     Log.WriteLine(sesion.Address + "<" + msg);
                 }
-                if (_TimeToLiveSeconds >= 0 && (DateTime.Now.Ticks - sesion.LastSeen) / CoreUtil.TICKS_PER_SECOND > _TimeToLiveSeconds)
+                if (_TimeToLiveSeconds >= 0 && (DateTime.Now.Ticks - sesion.LastSeen) / CoreUtil.TICKS_PER_SECOND > cTTL)
                 {
-                    if (sesion.Notified)
-                    {
-                        client.Close();
-                        lock (OUTqueue)
-                        {
-                            OUTqueue.Remove(sesion);
-                        }
-                        lock (sesions)
-                        {
-                            sesions.Remove(sesion);
-                        }
+                    //if (sesion.Notified)
+                    //{
+                    //    client.Close();
+                    //    lock (OUTqueue)
+                    //    {
+                    //        OUTqueue.Remove(sesion);
+                    //    }
+                    //    lock (sesions)
+                    //    {
+                    //        sesions.Remove(sesion);
+                    //    }
 
-                        Log.WriteLine("Client Timed Out:" + sesion.Address);
+                    //    Log.WriteLine("Client Timed Out:" + sesion.Address);
 
-                        return;
-                    }
-                    else
-                    {
-                        sendbuf = Encoding.ASCII.GetBytes(CoreUtil.KEEPALIVE_STRING + CoreUtil.MESSAGE_TERMINATOR);
-                        stream.Write(sendbuf, 0, sendbuf.Length);
-                        sesion.LastSeen = DateTime.Now.Ticks;
-                        sesion.Notified = true;
+                    //    return;
+                    //}
+                    //else
+                    //{
+                    sendbuf = Encoding.ASCII.GetBytes(CoreUtil.KEEPALIVE_STRING + CoreUtil.MESSAGE_TERMINATOR);
+                    SafeWrite(stream, sendbuf, 0, sendbuf.Length);
+                    sesion.LastSeen = DateTime.Now.Ticks;
+                    cTTL = _TimeToLiveSeconds * (random.NextDouble() + 1);
+                    //sesion.Notified = true;
 
-                        Log.WriteLine("Client Notified:" + sesion.Address);
-                    }
+                    Log.WriteLine("Client Notified:" + sesion.Address);
+                    //}
                 }
             }
             sendbuf = Encoding.ASCII.GetBytes(CoreUtil.DISCONNECT_STRING + CoreUtil.MESSAGE_TERMINATOR);
-            stream.Write(sendbuf, 0, sendbuf.Length);
+            SafeWrite(stream, sendbuf, 0, sendbuf.Length);
             client.Close();
             lock (OUTqueue)
             {
@@ -545,6 +533,18 @@ namespace MUVC.Server
                 {
                     throw new NoDestinationException();
                 }
+            }
+        }
+
+        private void SafeWrite(NetworkStream stream, byte[] buffer, int offset, int size)
+        {
+            try
+            {
+                stream.Write(buffer, offset, size);
+            }
+            catch
+            {
+                //Log.WriteLine("Failed to send");
             }
         }
 

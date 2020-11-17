@@ -61,7 +61,7 @@ namespace MUVC.Core.Util
             {
                 ConsoleColor pre = Console.ForegroundColor;
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("LOG: " + line);
+                Console.WriteLine("LOG " + DateTime.Now.ToLongTimeString() + ":" + line);
                 Console.ForegroundColor = pre;
             }
         }

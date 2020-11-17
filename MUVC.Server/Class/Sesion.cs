@@ -17,6 +17,6 @@ namespace MUVC.Server.Class
         public int Port { get { return identifier.Port; } }
         public IPAddress Address { get { return identifier.Address; } }
         public long LastSeen { get; set; }
-        public bool Notified { get; set; }
+        //public bool Notified { get; set; }
     }
 }
